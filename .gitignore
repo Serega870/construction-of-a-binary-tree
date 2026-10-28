@@ -1,220 +1,188 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+from collections import deque, namedtuple
 
-# C extensions
-*.so
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Значения по умолчанию
+OPTIONS = {
+    "root": 1,
+    "height": 5,
+    "left_leaf": lambda x: x * 2,
+    "right_leaf": lambda x: x + 3,
+}
 
-# PyInstaller
-#   Usually these files are written by a python script from a template
-#   before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+# Позволяет отличать пропущенный аргумент от явно переданного значения.
+UNSET = object()
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+Node = namedtuple("Node", ["value", "left", "right"])
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-*.lcov
-.hypothesis/
-.pytest_cache/
-cover/
 
-# Translations
-*.mo
-*.pot
+def get_parameters(root, height, left_leaf, right_leaf):
+    """Подставляет значения из OPTIONS и проверяет параметры."""
+    if root is UNSET:
+        root = OPTIONS["root"]
+    if height is UNSET:
+        height = OPTIONS["height"]
+    if left_leaf is UNSET:
+        left_leaf = OPTIONS["left_leaf"]
+    if right_leaf is UNSET:
+        right_leaf = OPTIONS["right_leaf"]
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+    if isinstance(height, bool) or not isinstance(height, int):
+        raise TypeError("Высота должна быть целым числом.")
 
-# Flask stuff:
-instance/
-.webassets-cache
+    if height < 0:
+        raise ValueError("Высота не может быть отрицательной.")
 
-# Scrapy stuff:
-.scrapy
+    if not callable(left_leaf) or not callable(right_leaf):
+        raise TypeError("Алгоритмы потомков должны быть функциями.")
 
-# Sphinx documentation
-docs/_build/
+    return root, height, left_leaf, right_leaf
 
-# PyBuilder
-.pybuilder/
-target/
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# 1. Рекурсивное построение дерева в виде словаря
+def build_tree(
+    root=UNSET,
+    height=UNSET,
+    left_leaf=UNSET,
+    right_leaf=UNSET,
+):
+    root, height, left_leaf, right_leaf = get_parameters(
+        root, height, left_leaf, right_leaf
+    )
 
-# IPython
-profile_default/
-ipython_config.py
+    def make_node(value, remaining):
+        if remaining == 0:
+            return {"value": value, "left": None, "right": None}
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+        return {
+            "value": value,
+            "left": make_node(left_leaf(value), remaining - 1),
+            "right": make_node(right_leaf(value), remaining - 1),
+        }
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-# Pipfile.lock
+    return make_node(root, height)
 
-# uv
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-# uv.lock
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-# poetry.lock
-# poetry.toml
+# 2. Построение по уровням с помощью deque
+def build_tree_with_deque(
+    root=UNSET,
+    height=UNSET,
+    left_leaf=UNSET,
+    right_leaf=UNSET,
+):
+    root, height, left_leaf, right_leaf = get_parameters(
+        root, height, left_leaf, right_leaf
+    )
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-# pdm.lock
-# pdm.toml
-.pdm-python
-.pdm-build/
+    tree = {"value": root, "left": None, "right": None}
+    queue = deque([(tree, height)])
 
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-# pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi/*
-!.pixi/config.toml
+    while queue:
+        node, remaining = queue.popleft()
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+        if remaining == 0:
+            continue
 
-# Celery stuff
-celerybeat-schedule*
-celerybeat.pid
+        for side, algorithm in [
+            ("left", left_leaf),
+            ("right", right_leaf),
+        ]:
+            child = {
+                "value": algorithm(node["value"]),
+                "left": None,
+                "right": None,
+            }
 
-# Redis
-*.rdb
-*.aof
-*.pid
+            node[side] = child
+            queue.append((child, remaining - 1))
 
-# RabbitMQ
-mnesia/
-rabbitmq/
-rabbitmq-data/
+    return tree
 
-# ActiveMQ
-activemq-data/
 
-# SageMath parsed files
-*.sage.py
+# 3. Дополнительное представление узлов через namedtuple
+def build_tree_with_namedtuple(
+    root=UNSET,
+    height=UNSET,
+    left_leaf=UNSET,
+    right_leaf=UNSET,
+):
+    root, height, left_leaf, right_leaf = get_parameters(
+        root, height, left_leaf, right_leaf
+    )
 
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+    def make_node(value, remaining):
+        if remaining == 0:
+            return Node(value, None, None)
 
-# Spyder project settings
-.spyderproject
-.spyproject
+        return Node(
+            value,
+            make_node(left_leaf(value), remaining - 1),
+            make_node(right_leaf(value), remaining - 1),
+        )
 
-# Rope project settings
-.ropeproject
+    return make_node(root, height)
 
-# mkdocs/Zensical documentation
-/site
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+def to_dict(node):
+    """Преобразует дерево из namedtuple во вложенные словари."""
+    if node is None:
+        return None
 
-# Pyre type checker
-.pyre/
+    return {
+        "value": node.value,
+        "left": to_dict(node.left),
+        "right": to_dict(node.right),
+    }
 
-# pytype static type analyzer
-.pytype/
 
-# Cython debug symbols
-cython_debug/
+def print_tree(tree, level=0, label="Корень"):
+    """Печатает дерево из словарей или namedtuple."""
+    if tree is None:
+        return
 
-# PyCharm
-#   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#   be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#   and can be added to the global gitignore or merged into this file.  For a more nuclear
-#   option (not recommended) you can uncomment the following to ignore the entire idea folder.
-# .idea/
+    if isinstance(tree, dict):
+        value = tree["value"]
+        left = tree["left"]
+        right = tree["right"]
+    else:
+        value = tree.value
+        left = tree.left
+        right = tree.right
 
-# Abstra
-#   Abstra is an AI-powered process automation framework.
-#   Ignore directories containing user credentials, local state, and settings.
-#   Learn more at https://abstra.io/docs
-.abstra/
+    print("    " * level + f"{label}: {value}")
+    print_tree(left, level + 1, "Л")
+    print_tree(right, level + 1, "П")
 
-# Visual Studio Code
-#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore that
-#   can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#   and can be added to the global gitignore or merged into this file. However, if you prefer, you
-#   could uncomment the following to ignore the entire vscode folder
-# .vscode/
-# Temporary file for partial code execution
-tempCodeRunnerFile.py
 
-# Ruff stuff:
-.ruff_cache/
+if __name__ == "__main__":
+    root_text = input(
+        f"Введите корень [по умолчанию {OPTIONS['root']}]: "
+    ).strip()
 
-# PyPI configuration file
-.pypirc
+    height_text = input(
+        f"Введите высоту [по умолчанию {OPTIONS['height']}]: "
+    ).strip()
 
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+    # Если пользователь ничего не ввёл, аргумент остаётся пропущенным.
+    root = int(root_text) if root_text else UNSET
+    height = int(height_text) if height_text else UNSET
 
-# Streamlit
-.streamlit/secrets.toml
+    print("\n1. Рекурсивное построение")
+    tree = build_tree(root=root, height=height)
+    print_tree(tree)
+
+    print("\n2. Построение с помощью deque")
+    tree_deque = build_tree_with_deque(root=root, height=height)
+    print("Результаты совпадают:", tree == tree_deque)
+
+    print("\n3. Представление через namedtuple")
+    tree_named = build_tree_with_namedtuple(root=root, height=height)
+    print("Результаты совпадают:", tree == to_dict(tree_named))
+
+    print("\n4. Собственные алгоритмы")
+    custom_tree = build_tree(
+        root=10,
+        height=2,
+        left_leaf=lambda x: x - 1,
+        right_leaf=lambda x: x + 1,
+    )
+    print_tree(custom_tree)
